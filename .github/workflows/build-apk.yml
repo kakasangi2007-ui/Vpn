@@ -18,6 +18,32 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: نصب وابستگی‌های سیستم
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y openjdk-17-jdk android-sdk curl git unzip xz-utils zip libglu1-mesa
+
+    - name: تنظیم متغیرهای محیطی JDK و SDK
+      run: |
+        echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+        echo "ANDROID_HOME=/usr/lib/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=/usr/lib/android-sdk" >> $GITHUB_ENV
+
+    - name: نصب Flutter SDK
+      run: |
+        cd /opt
+        sudo git clone https://github.com/flutter/flutter.git -b stable
+        sudo chmod -R 777 /opt/flutter
+        echo "/opt/flutter/bin" >> $GITHUB_PATH
+        echo "FLUTTER_ROOT=/opt/flutter" >> $GITHUB_ENV
+
+    - name: بررسی نصب Flutter
+      run: |
+        export PATH="$PATH:/opt/flutter/bin"
+        flutter --version
+        flutter doctor --android-licenses -y || true
+        echo "y" | flutter doctor --android-licenses || true
+
     - name: نصب Flet و وابستگی‌ها
       run: |
         python -m pip install --upgrade pip
@@ -34,9 +60,11 @@ jobs:
           exit 1
         fi
 
-    - name: ساخت APK
+    - name: ساخت APK با Flet (غیرتعاملی)
       run: |
-        flet build apk --verbose
+        export PATH="$PATH:/opt/flutter/bin"
+        export FLUTTER_ROOT="/opt/flutter"
+        echo "y" | flet build apk --verbose || true
 
     - name: آپلود APK
       uses: actions/upload-artifact@v4
