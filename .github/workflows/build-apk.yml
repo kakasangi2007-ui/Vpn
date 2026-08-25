@@ -8,10 +8,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
 
     steps:
     - name: 📥 دریافت کد
       uses: actions/checkout@v4
+
+    - name: 📂 نمایش ساختار فایل‌ها (دیباگ)
+      run: |
+        echo "📂 لیست فایل‌های پروژه:"
+        ls -la
+        echo ""
+        echo "📂 محتویات پوشه core (اگر وجود دارد):"
+        ls -la core/ 2>/dev/null || echo "پوشه core وجود ندارد"
+        echo ""
+        echo "📂 محتویات پوشه core/android (اگر وجود دارد):"
+        ls -la core/android/ 2>/dev/null || echo "پوشه core/android وجود ندارد"
 
     - name: 🐍 نصب Python
       uses: actions/setup-python@v5
@@ -21,54 +33,107 @@ jobs:
     - name: 🔧 نصب وابستگی‌های سیستم
       run: |
         sudo apt-get update -qq
-        sudo apt-get install -y -qq openjdk-17-jdk curl git unzip xz-utils zip libglu1-mesa wget
+        sudo apt-get install -y -qq \
+          openjdk-17-jdk \
+          curl \
+          git \
+          unzip \
+          xz-utils \
+          zip \
+          libglu1-mesa \
+          wget \
+          libgtk-3-dev
+        echo "✅ وابستگی‌های سیستم نصب شدند."
 
     - name: 📁 تنظیم متغیرهای محیطی
       run: |
         echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
 
     - name: 🎯 نصب Flutter SDK
       run: |
+        echo "⏳ دانلود Flutter SDK..."
         cd /opt
         sudo git clone --depth 1 -b stable https://github.com/flutter/flutter.git
         sudo chmod -R 777 /opt/flutter
         echo "/opt/flutter/bin" >> $GITHUB_PATH
-        echo "FLUTTER_ROOT=/opt/flutter" >> $GITHUB_PATH
+        echo "FLUTTER_ROOT=/opt/flutter" >> $GITHUB_ENV
+        echo "✅ Flutter SDK نصب شد."
 
     - name: 📦 نصب Flet و وابستگی‌ها
       run: |
+        echo "⏳ نصب Flet..."
         python -m pip install --upgrade pip
         pip install flet
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        
+        if [ -f requirements.txt ]; then
+          echo "⏳ نصب وابستگی‌های پروژه..."
+          pip install -r requirements.txt
+        fi
+        echo "✅ Flet و وابستگی‌ها نصب شدند."
 
-    - name: 🔑 تنظیم مجوز Xray
+    - name: 🔑 تنظیم مجوز Xray برای اندروید
       run: |
         if [ -f core/android/xray ]; then
           chmod +x core/android/xray
           echo "✅ مجوز اجرایی برای core/android/xray تنظیم شد."
+        else
+          echo "⚠️ هشدار: فایل xray در مسیر core/android/ پیدا نشد!"
         fi
 
-    - name: 🏗️ ساخت APK با ماژول vpn
+    - name: 🏗️ نصب Android SDK و ساخت APK
       run: |
         export PATH="$PATH:/opt/flutter/bin"
         export FLUTTER_ROOT="/opt/flutter"
         export ANDROID_HOME="$HOME/android-sdk"
         export ANDROID_SDK_ROOT="$HOME/android-sdk"
         
-        # نصب Android SDK
+        echo "⏳ نصب Android SDK..."
         mkdir -p $ANDROID_HOME
+        
+        # دانلود و نصب cmdline-tools
         cd $HOME
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
         unzip -q commandlinetools-linux-11076708_latest.zip
         mkdir -p $ANDROID_HOME/cmdline-tools
         mv cmdline-tools $ANDROID_HOME/cmdline-tools/latest
         rm commandlinetools-linux-11076708_latest.zip
+        
+        # تنظیم PATH برای sdkmanager
         export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-        yes | sdkmanager --licenses > /dev/null 2>&1
-        sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34" > /dev/null 2>&1
+        
+        # پذیرش مجوزها
+        echo "⏳ پذیرش مجوزهای SDK..."
+        yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        
+        # نصب اجزای مورد نیاز
+        echo "⏳ نصب platform-tools, build-tools و platform..."
+        sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34" > /dev/null 2>&1 || true
+        
+        echo "✅ Android SDK نصب شد."
+        
+        # برگشت به پوشه پروژه
+        cd $GITHUB_WORKSPACE
+        
+        # بررسی وجود فایل vpn.py
+        echo "📂 بررسی فایل‌های پروژه قبل از ساخت:"
+        ls -la
+        
+        if [ ! -f vpn.py ]; then
+          echo "❌ خطا: فایل vpn.py در ریشه پروژه پیدا نشد!"
+          exit 1
+        fi
+        
+        echo "✅ فایل vpn.py پیدا شد."
         
         # ساخت APK با مشخص کردن ماژول vpn
+        echo "⏳ شروع ساخت APK..."
+        echo "⏳ این مرحله ممکن است 10-15 دقیقه طول بکشد..."
+        
         yes | flet build apk --module-name vpn --verbose 2>&1 | tee build_log.txt
+        
+        echo "✅ فرآیند ساخت کامل شد."
 
     - name: 📤 آپلود APK
       uses: actions/upload-artifact@v4
@@ -84,17 +149,25 @@ jobs:
         path: build_log.txt
       continue-on-error: true
 
-    - name: 📊 نمایش نتیجه
+    - name: 📊 نمایش نتیجه نهایی
       run: |
         echo "========================================="
         echo "✅ فرآیند ساخت به پایان رسید."
         echo "========================================="
-        if ls build/apk/*.apk 1> /dev/null 2>&1; then
+        
+        if [ -d "build/apk" ] && [ "$(ls -A build/apk/*.apk 2>/dev/null)" ]; then
           echo "🎉 APK ساخته شده و در Artifacts موجود است!"
+          echo "📂 فایل‌های ساخته شده:"
           ls -la build/apk/
         else
-          echo "⚠️ APK ساخته نشد. فایل Build-Log را بررسی کنید."
-          echo "📂 محتویات دایرکتوری:"
+          echo "⚠️ APK ساخته نشد."
+          echo ""
+          echo "📂 محتویات پوشه build:"
+          ls -la build/ 2>/dev/null || echo "پوشه build وجود ندارد"
+          echo ""
+          echo "📂 محتویات کل پروژه:"
           ls -la
+          echo ""
+          echo "📄 لاگ ساخت را بررسی کنید."
         fi
         echo "========================================="
