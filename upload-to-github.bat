@@ -17,22 +17,22 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-echo [1/7] Git äÕÈ ÇÓÊ. ÇÏÇãå ãíÏåíã...
+echo [1/8] Git äÕÈ ÇÓÊ. ÇÏÇãå ãíÏåíã...
 echo.
 
-:: ÊäÙíã åæíÊ ˜ÇÑÈÑ (ãåã!)
-echo [2/7] ÊäÙíã åæíÊ ˜ÇÑÈÑ ÈÑÇí git...
+:: ÊäÙíã åæíÊ ˜ÇÑÈÑ
+echo [2/8] ÊäÙíã åæíÊ ˜ÇÑÈÑ ÈÑÇí git...
 git config --global user.email "kakasangi2007@gmail.com"
 git config --global user.name "kakasangi2007-ui"
 echo.
 
 :: ÑÇåÇäÏÇÒí git
-echo [3/7] ÏÑ ÍÇá ÑÇåÇäÏÇÒí git...
+echo [3/8] ÏÑ ÍÇá ÑÇåÇäÏÇÒí git...
 git init
 echo.
 
 :: ÊäÙíã remote
-echo [4/7] ÇÊÕÇá Èå ãÎÒä íÊåÇÈ...
+echo [4/8] ÇÊÕÇá Èå ãÎÒä íÊåÇÈ...
 git remote add origin https://github.com/kakasangi2007-ui/Vpn.git 2>nul
 if %errorlevel% neq 0 (
     echo ŞÈáÇğ remote ÊäÙíã ÔÏå¡ ÈåÑæÒÑÓÇäí ãíÔæÏ...
@@ -40,20 +40,26 @@ if %errorlevel% neq 0 (
 )
 echo.
 
+:: ÊÛííÑ äÇã ÔÇÎå Èå main
+echo [5/8] ÊÛííÑ ÔÇÎå Èå main...
+git branch -M main
+echo.
+
 :: ÇİÒæÏä åãå İÇíáåÇ
-echo [5/7] ÇİÒæÏä åãå İÇíáåÇ Èå git...
+echo [6/8] ÇİÒæÏä åãå İÇíáåÇ Èå git...
 git add .
 echo.
 
-:: ˜ÇãíÊ ˜ÑÏä (ÈÇ íÇã)
-echo [6/7] ËÈÊ ÊÛííÑÇÊ...
+:: ˜ÇãíÊ ˜ÑÏä
+echo [7/8] ËÈÊ ÊÛííÑÇÊ...
 git commit -m "ÂáæÏ Ñæå VPN"
 echo.
 
-:: æÔ Èå íÊåÇÈ
-echo [7/7] ÇÑÓÇá Èå íÊåÇÈ...
+:: æÔ Èå íÊåÇÈ (ÔÇÎå main)
+echo [8/8] ÇÑÓÇá Èå íÊåÇÈ (ÔÇÎå main)...
 echo.
 
+git pull origin main --allow-unrelated-histories
 git push -u origin main
 
 echo.
@@ -61,18 +67,15 @@ echo ========================================
 if %errorlevel% equ 0 (
     echo ? ÂáæÏ ÈÇ ãæİŞíÊ ÇäÌÇã ÔÏ!
     echo.
-    echo ÍÇáÇ ÈÑæ Èå:
-    echo https://github.com/kakasangi2007-ui/Vpn
-    echo.
+    echo ÈÑæ Èå: https://github.com/kakasangi2007-ui/Vpn
     echo ÓÓ ÊÈ Actions Ñæ ÈÒä æ Run workflow Ñæ ˜áí˜ ˜ä.
 ) else (
     echo ? ÎØÇíí ÑÎ ÏÇÏ.
     echo.
-    echo ÇÑ ÎØÇ İÊ "failed to push some refs"¡
-    echo Çæá Çíä ÏÓÊæÑ Ñæ Êæ ÊÑãíäÇá ÈÒä:
+    echo ÇÑ ÎØÇ İÊ "failed to push some refs":
     echo git pull --rebase origin main
     echo.
-    echo ÓÓ ÏæÈÇÑå İÇíá bat Ñæ ÇÌÑÇ ˜ä.
+    echo ÓÓ ÏæÈÇÑå bat Ñæ ÇÌÑÇ ˜ä.
 )
 echo ========================================
 pause
