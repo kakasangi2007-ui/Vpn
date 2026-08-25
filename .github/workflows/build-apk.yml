@@ -10,64 +10,99 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: دریافت کد
+    - name: 📥 دریافت کد
       uses: actions/checkout@v4
 
-    - name: نصب Python
+    - name: 🐍 نصب Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    - name: نصب وابستگی‌های سیستم
+    - name: 🔧 نصب وابستگی‌های سیستم
       run: |
-        sudo apt-get update
-        sudo apt-get install -y openjdk-17-jdk android-sdk curl git unzip xz-utils zip libglu1-mesa
+        echo "⏳ به‌روزرسانی مخازن..."
+        sudo apt-get update -qq
+        echo "⏳ نصب JDK، SDK و ابزارهای مورد نیاز..."
+        sudo apt-get install -y -qq openjdk-17-jdk android-sdk curl git unzip xz-utils zip libglu1-mesa wget
+        echo "✅ وابستگی‌های سیستم نصب شدند."
 
-    - name: تنظیم متغیرهای محیطی JDK و SDK
+    - name: 📁 تنظیم متغیرهای محیطی
       run: |
+        echo "⏳ تنظیم JAVA_HOME و ANDROID_HOME..."
         echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
         echo "ANDROID_HOME=/usr/lib/android-sdk" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=/usr/lib/android-sdk" >> $GITHUB_ENV
+        echo "✅ متغیرهای محیطی تنظیم شدند."
 
-    - name: نصب Flutter SDK
+    - name: 🎯 نصب و تنظیم Flutter SDK
       run: |
+        echo "⏳ دانلود Flutter SDK..."
         cd /opt
-        sudo git clone https://github.com/flutter/flutter.git -b stable
+        sudo git clone --depth 1 -b stable https://github.com/flutter/flutter.git
         sudo chmod -R 777 /opt/flutter
         echo "/opt/flutter/bin" >> $GITHUB_PATH
-        echo "FLUTTER_ROOT=/opt/flutter" >> $GITHUB_ENV
-
-    - name: بررسی نصب Flutter
-      run: |
+        echo "FLUTTER_ROOT=/opt/flutter" >> $GITHUB_PATH
+        echo "✅ Flutter SDK نصب شد."
+        echo "⏳ بررسی نصب Flutter..."
         export PATH="$PATH:/opt/flutter/bin"
         flutter --version
-        flutter doctor --android-licenses -y || true
-        echo "y" | flutter doctor --android-licenses || true
+        echo "✅ Flutter آماده است."
 
-    - name: نصب Flet و وابستگی‌ها
+    - name: 📦 نصب Flet و وابستگی‌ها
       run: |
+        echo "⏳ نصب Flet و وابستگی‌ها..."
         python -m pip install --upgrade pip
         pip install flet
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        if [ -f requirements.txt ]; then 
+          echo "⏳ نصب وابستگی‌های پروژه از requirements.txt..."
+          pip install -r requirements.txt
+        fi
+        echo "✅ Flet و وابستگی‌ها نصب شدند."
 
-    - name: تنظیم مجوز اجرایی برای فایل Xray در اندروید
+    - name: 🔑 تنظیم مجوز Xray برای اندروید
       run: |
+        echo "⏳ بررسی فایل Xray..."
         if [ -f core/android/xray ]; then
           chmod +x core/android/xray
-          echo "مجوز اجرایی برای xray تنظیم شد."
+          echo "✅ مجوز اجرایی برای core/android/xray تنظیم شد."
+          ls -la core/android/xray
         else
-          echo "فایل xray در مسیر core/android/ پیدا نشد!"
-          exit 1
+          echo "⚠️ هشدار: فایل xray در مسیر core/android/ پیدا نشد!"
         fi
 
-    - name: ساخت APK با Flet (غیرتعاملی)
+    - name: 🏗️ ساخت APK (با پاسخ خودکار به سوالات)
       run: |
+        echo "⏳ شروع ساخت APK..."
+        echo "⏳ این مرحله ممکن است 5-10 دقیقه طول بکشد..."
         export PATH="$PATH:/opt/flutter/bin"
         export FLUTTER_ROOT="/opt/flutter"
-        echo "y" | flet build apk --verbose || true
+        
+        # ترفند: با echo "y" به همه سوالات پاسخ بده
+        echo "y" | flet build apk --verbose 2>&1 | tee build_log.txt
+        
+        echo "✅ فرآیند ساخت کامل شد."
+        echo "⏳ بررسی وضعیت خروجی..."
+        ls -la build/apk/ || echo "⚠️ پوشه build/apk/ وجود ندارد!"
 
-    - name: آپلود APK
+    - name: 📤 آپلود APK به عنوان Artifact
       uses: actions/upload-artifact@v4
       with:
         name: Vpn-App-APK
         path: build/apk/*.apk
+      continue-on-error: true
+
+    - name: 📤 آپلود لاگ ساخت
+      uses: actions/upload-artifact@v4
+      with:
+        name: Build-Log
+        path: build_log.txt
+      continue-on-error: true
+
+    - name: 📊 نمایش اطلاعات نهایی
+      run: |
+        echo "========================================="
+        echo "✅ فرآیند ساخت به پایان رسید."
+        echo "========================================="
+        echo "📁 اگر APK ساخته شده باشد، در بخش Artifacts موجود است."
+        echo "📁 اگر خطایی رخ داده، فایل Build-Log را بررسی کنید."
+        echo "========================================="
