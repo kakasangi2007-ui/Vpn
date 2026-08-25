@@ -1,0 +1,11 @@
+{
+  "auto_connect": false,
+  "theme": "light",
+  "last_server": -1,
+  "configs": [
+    "vless://example-uuid@server1.example.com:443?security=reality&sni=example.com&fp=chrome&pbk=public-key#Server-1",
+    "trojan://password@server2.example.com:443?security=tls&sni=example.com#Server-2",
+    "vmess://eyJhZGQiOiJzZXJ2ZXIzLmV4YW1wbGUuY29tIiwicG9ydCI6NDQzLCJpZCI6InV1aWQiLCJzZWN1cml0eSI6ImF1dG8iLCJuZXQiOiJ0Y3AiLCJ0bHMiOiJ0bHMiLCJzbmkiOiJleGFtcGxlLmNvbSIsInBzIjoiU2VydmVyLTMifQ==",
+    "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpwYXNzd29yZEBzZXJ2ZXI0LmV4YW1wbGUuY29tOjQ0Mw#Server-4"
+  ]
+}
