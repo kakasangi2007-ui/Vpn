@@ -1,0 +1,45 @@
+name: ساخت APK با Flet
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: دریافت کد
+      uses: actions/checkout@v4
+
+    - name: نصب Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: نصب Flet و وابستگی‌ها
+      run: |
+        python -m pip install --upgrade pip
+        pip install flet
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: تنظیم مجوز اجرایی برای فایل Xray در اندروید
+      run: |
+        if [ -f core/android/xray ]; then
+          chmod +x core/android/xray
+          echo "مجوز اجرایی برای xray تنظیم شد."
+        else
+          echo "فایل xray در مسیر core/android/ پیدا نشد!"
+          exit 1
+        fi
+
+    - name: ساخت APK
+      run: |
+        flet build apk --verbose
+
+    - name: آپلود APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Vpn-App-APK
+        path: build/apk/*.apk
