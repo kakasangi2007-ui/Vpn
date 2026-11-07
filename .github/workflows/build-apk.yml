@@ -19,6 +19,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies (CPU Torch)
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -26,18 +27,34 @@ jobs:
           pip install pyinstaller
 
       - name: Clone Ezsynth
-        run: git clone https://github.com/Trentonom0r3/Ezsynth.git ezsynth_lib
+        shell: pwsh
+        run: |
+          git clone https://github.com/Trentonom0r3/Ezsynth.git ezsynth_lib
+
+      - name: Install Ezsynth requirements
+        shell: pwsh
+        run: |
+          pip install -r ezsynth_lib/requirements.txt
 
       - name: Download EF_RAFT models
+        shell: pwsh
         run: |
-          mkdir -p ezsynth_lib/ezsynth/utils/flow_utils/ef_raft_models
-          cd ezsynth_lib/ezsynth/utils/flow_utils/ef_raft_models
-          curl -L -o 25000_ours-sintel.pth https://github.com/n3slami/Ef-RAFT/raw/master/models/25000_ours-sintel.pth
-          curl -L -o ours-things.pth https://github.com/n3slami/Ef-RAFT/raw/master/models/ours-things.pth
-          curl -L -o ours_sintel.pth https://github.com/n3slami/Ef-RAFT/raw/master/models/ours_sintel.pth
+          # ایجاد پوشه به صورتی که اگر وجود داشت، خطا ندهد
+          $modelDir = "ezsynth_lib/ezsynth/utils/flow_utils/ef_raft_models"
+          New-Item -ItemType Directory -Force -Path $modelDir -ErrorAction SilentlyContinue
+          
+          # دانلود مدل‌های EF_RAFT از مخزن اصلی
+          # طبق مستندات Ezsynth، این سه فایل مورد نیاز هستند
+          $baseUrl = "https://github.com/n3slami/Ef-RAFT/raw/master/models"
+          
+          Invoke-WebRequest -Uri "$baseUrl/25000_ours-sintel.pth" -OutFile "$modelDir/25000_ours-sintel.pth"
+          Invoke-WebRequest -Uri "$baseUrl/ours-things.pth" -OutFile "$modelDir/ours-things.pth"
+          Invoke-WebRequest -Uri "$baseUrl/ours_sintel.pth" -OutFile "$modelDir/ours_sintel.pth"
 
       - name: Build with PyInstaller
-        run: pyinstaller pyinstaller.spec
+        shell: pwsh
+        run: |
+          pyinstaller pyinstaller.spec
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
