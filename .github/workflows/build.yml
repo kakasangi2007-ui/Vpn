@@ -39,12 +39,11 @@ jobs:
       - name: Download EF_RAFT models
         shell: pwsh
         run: |
-          # ایجاد پوشه به صورتی که اگر وجود داشت، خطا ندهد
+          # ایجاد پوشه مدل‌ها به صورتی که در صورت وجود داشتن خطا ندهد
           $modelDir = "ezsynth_lib/ezsynth/utils/flow_utils/ef_raft_models"
           New-Item -ItemType Directory -Force -Path $modelDir -ErrorAction SilentlyContinue
           
-          # دانلود مدل‌های EF_RAFT از مخزن اصلی
-          # طبق مستندات Ezsynth، این سه فایل مورد نیاز هستند
+          # دانلود مدل‌های EF_RAFT از مخزن اصلی (طبق مستندات Ezsynth)
           $baseUrl = "https://github.com/n3slami/Ef-RAFT/raw/master/models"
           
           Invoke-WebRequest -Uri "$baseUrl/25000_ours-sintel.pth" -OutFile "$modelDir/25000_ours-sintel.pth"
