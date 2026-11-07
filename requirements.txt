@@ -1,6 +1,6 @@
+numpy<2.0
 torch
 Pillow
-numpy
 phycv
 opencv-contrib-python
 scipy
