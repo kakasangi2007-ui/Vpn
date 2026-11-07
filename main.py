@@ -38,7 +38,6 @@ try:
     from ezsynth.aux_classes import RunConfig
     from ezsynth.aux_utils import save_seq
 except Exception as e:
-    # در حالت exe اگر خطا رخ دهد، باید پیام را ببینیم
     root = tk.Tk()
     root.withdraw()
     messagebox.showerror(
@@ -52,7 +51,6 @@ except Exception as e:
 # ==================== توابع پردازش ====================
 
 def _check_ffmpeg():
-    """بررسی وجود ffmpeg و بازگرداندن مسیر آن؛ در صورت نبود، خطای واضح می‌دهد."""
     global FFMPEG_EXE
     if os.path.isfile(FFMPEG_EXE):
         return FFMPEG_EXE
@@ -68,7 +66,6 @@ def _check_ffmpeg():
 
 
 def extract_frames(video_path, output_dir):
-    """استخراج فریم‌ها با ffmpeg."""
     ffmpeg = _check_ffmpeg()
     os.makedirs(output_dir, exist_ok=True)
     cmd = [ffmpeg, '-i', video_path, os.path.join(output_dir, 'frame_%06d.png')]
@@ -101,7 +98,6 @@ def frames_to_video(frames_dir, output_video, fps=30):
 
 
 def _safe_unpack_ezsynth_result(result):
-    """بررسی خروجی run_sequences_full و استخراج لیست فریم‌ها."""
     if result is None:
         raise RuntimeError("Ezsynth مقدار None برگرداند. احتمالاً مدل‌های EF_RAFT وجود ندارند.")
     if isinstance(result, tuple):
@@ -119,7 +115,6 @@ def _safe_unpack_ezsynth_result(result):
 
 
 def _fallback_save_frames(frames, out_dir):
-    """ذخیره دستی فریم‌ها با PIL در صورت شکست save_seq."""
     import numpy as np
     from PIL import Image
     os.makedirs(out_dir, exist_ok=True)
@@ -136,7 +131,6 @@ def _fallback_save_frames(frames, out_dir):
 
 
 def run_conversion(input_video, output_video, style_image=None, log_cb=None):
-    """فرایند کامل تبدیل."""
     t_start = time.time()
 
     def _log(msg):
@@ -162,7 +156,7 @@ def run_conversion(input_video, output_video, style_image=None, log_cb=None):
                 style_paths=[style_image],
                 image_folder=frames_dir,
                 cfg=cfg,
-                edge_method="PAGE",
+                edge_method="Classic",  # <--- تغییر یافت: استفاده از Classic به جای PAGE برای سازگاری با CPU
                 raft_flow_model_name="25000_ours-sintel",
                 do_mask=False,
                 flow_arch="EF_RAFT",
