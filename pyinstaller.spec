@@ -77,6 +77,7 @@ a = Analysis(
     datas=[
         ('ezsynth_lib/ezsynth', 'ezsynth_lib/ezsynth'),
         ('ezsynth_lib/ezsynth/utils/flow_utils/ef_raft_models', 'ezsynth_lib/ezsynth/utils/flow_utils/ef_raft_models'),
+        ('ffmpeg', 'ffmpeg'),
     ] + numpy_datas + tqdm_datas + torchvision_datas + torch_datas,
     hiddenimports=hiddenimports,
     hookspath=[],
