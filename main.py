@@ -1,5 +1,14 @@
-import os
 import sys
+import os
+
+# --- راه‌حل قطعی خطای tqdm در حالت بدون کنسول (PyInstaller --noconsole) ---
+if getattr(sys, 'frozen', False) and sys.stdout is None:
+    class DummyStream:
+        def write(self, *args, **kwargs): pass
+        def flush(self): pass
+    sys.stdout = DummyStream()
+    sys.stderr = DummyStream()
+
 import time
 import threading
 import subprocess
@@ -28,8 +37,10 @@ try:
     from ezsynth.main_ez import Ezsynth
     from ezsynth.aux_classes import RunConfig
     from ezsynth.aux_utils import save_seq
-    from ezsynth.sequences import EasySequence
 except Exception as e:
+    # در حالت exe اگر خطا رخ دهد، باید پیام را ببینیم
+    root = tk.Tk()
+    root.withdraw()
     messagebox.showerror(
         "خطای حیاتی",
         f"کتابخانه Ezsynth بارگذاری نشد:\n{e}\n\n"
@@ -45,7 +56,6 @@ def _check_ffmpeg():
     global FFMPEG_EXE
     if os.path.isfile(FFMPEG_EXE):
         return FFMPEG_EXE
-    # اگر در PATH بود
     import shutil
     found = shutil.which('ffmpeg')
     if found:
@@ -58,7 +68,7 @@ def _check_ffmpeg():
 
 
 def extract_frames(video_path, output_dir):
-    """استخراج فریم‌ها با ffmpeg. در صورت خطا، پیام واضح می‌دهد."""
+    """استخراج فریم‌ها با ffmpeg."""
     ffmpeg = _check_ffmpeg()
     os.makedirs(output_dir, exist_ok=True)
     cmd = [ffmpeg, '-i', video_path, os.path.join(output_dir, 'frame_%06d.png')]
@@ -91,19 +101,9 @@ def frames_to_video(frames_dir, output_video, fps=30):
 
 
 def _safe_unpack_ezsynth_result(result):
-    """
-    خروجی run_sequences_full ممکن است:
-      - تاپل ۳ عضوی (stylized, err, flow)
-      - تاپل ۲ عضوی (stylized, err)
-      - مستقیماً لیست فریم‌ها
-    این تابع در همه حالت‌ها لیست فریم‌های استایل‌شده را برمی‌گرداند.
-    """
+    """بررسی خروجی run_sequences_full و استخراج لیست فریم‌ها."""
     if result is None:
-        raise RuntimeError(
-            "Ezsynth مقدار None برگرداند. "
-            "احتمالاً مدل‌های EF_RAFT در پوشه ezsynth_lib وجود ندارند "
-            "یا فایل‌های DLL به درستی بارگذاری نشده‌اند."
-        )
+        raise RuntimeError("Ezsynth مقدار None برگرداند. احتمالاً مدل‌های EF_RAFT وجود ندارند.")
     if isinstance(result, tuple):
         if len(result) == 0:
             raise RuntimeError("Ezsynth تاپل خالی برگرداند.")
@@ -112,7 +112,7 @@ def _safe_unpack_ezsynth_result(result):
         stylized = result
 
     if stylized is None:
-        raise RuntimeError("لیست فریم‌های استایل‌شده None است. مدل‌ها یا حافظه را بررسی کنید.")
+        raise RuntimeError("لیست فریم‌های استایل‌شده None است.")
     if not hasattr(stylized, '__len__') or len(stylized) == 0:
         raise RuntimeError("Ezsynth هیچ فریمی تولید نکرد.")
     return stylized
@@ -127,7 +127,6 @@ def _fallback_save_frames(frames, out_dir):
         if frame is None:
             continue
         if isinstance(frame, np.ndarray):
-            # اطمینان از نوع uint8
             if frame.dtype != np.uint8:
                 frame = frame.astype('uint8')
             img = Image.fromarray(frame)
@@ -137,9 +136,7 @@ def _fallback_save_frames(frames, out_dir):
 
 
 def run_conversion(input_video, output_video, style_image=None, log_cb=None):
-    """
-    فرایند کامل تبدیل. هر خطا با پیام فارسی و قابل‌فهم بازگردانده می‌شود.
-    """
+    """فرایند کامل تبدیل."""
     t_start = time.time()
 
     def _log(msg):
@@ -159,7 +156,6 @@ def run_conversion(input_video, output_video, style_image=None, log_cb=None):
         if style_image is None:
             style_image = os.path.join(frames_dir, frame_files[0])
 
-        # --- ساخت Ezsynth با تنظیمات سبک ---
         cfg = RunConfig(pre_mask=False, feather=5)
         try:
             ez = Ezsynth(
@@ -190,17 +186,14 @@ def run_conversion(input_video, output_video, style_image=None, log_cb=None):
         os.makedirs(stylized_dir, exist_ok=True)
         _log("ذخیره فریم‌های استایل‌شده...")
 
-        # --- تلاش برای save_seq؛ در صورت شکست، ذخیره دستی ---
         try:
             save_seq(stylized_frames, stylized_dir)
-            # بررسی اینکه حداقل یک فریم ذخیره شده باشد
             if not any(f.endswith('.png') for f in os.listdir(stylized_dir)):
                 raise RuntimeError("save_seq هیچ فایلی ذخیره نکرد.")
         except Exception as e:
             _log(f"save_seq شکست خورد ({e})، ذخیره دستی فریم‌ها...")
             _fallback_save_frames(stylized_frames, stylized_dir)
 
-        # اطمینان نهایی
         if not any(f.endswith('.png') for f in os.listdir(stylized_dir)):
             raise RuntimeError("هیچ فریمی ذخیره نشد. پردازش ناقص است.")
 
