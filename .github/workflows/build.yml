@@ -46,6 +46,17 @@ jobs:
           Invoke-WebRequest -Uri "$baseUrl/ours-things.pth" -OutFile "$modelDir/ours-things.pth"
           Invoke-WebRequest -Uri "$baseUrl/ours_sintel.pth" -OutFile "$modelDir/ours_sintel.pth"
 
+      - name: Download ffmpeg
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "ffmpeg" -ErrorAction SilentlyContinue
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip"
+          Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_temp" -Force
+          $binPath = Get-ChildItem -Path "ffmpeg_temp" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+          Copy-Item -Path $binPath.FullName -Destination "ffmpeg/ffmpeg.exe" -Force
+          Remove-Item -Recurse -Force "ffmpeg_temp"
+          Remove-Item -Force "ffmpeg.zip"
+
       - name: Build with PyInstaller
         shell: pwsh
         run: |
