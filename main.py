@@ -156,10 +156,10 @@ def run_conversion(input_video, output_video, style_image=None, log_cb=None):
                 style_paths=[style_image],
                 image_folder=frames_dir,
                 cfg=cfg,
-                edge_method="Classic",  # <--- تغییر یافت: استفاده از Classic به جای PAGE برای سازگاری با CPU
+                edge_method="Classic",  # استفاده از CPU برای تشخیص لبه
                 raft_flow_model_name="25000_ours-sintel",
                 do_mask=False,
-                flow_arch="EF_RAFT",
+                flow_arch="RAFT",       # تغییر به RAFT استاندارد برای سازگاری با CPU
             )
         except Exception as e:
             raise RuntimeError(f"راه‌اندازی Ezsynth شکست خورد: {e}")
@@ -167,7 +167,8 @@ def run_conversion(input_video, output_video, style_image=None, log_cb=None):
         _log("در حال استایل‌دهی فریم‌ها... (ممکن است چند دقیقه طول بکشد)")
         start_style = time.time()
         try:
-            result = ez.run_sequences_full(only_mode=None, return_flow=True)
+            # اصلاح خطای TypeError: حذف only_mode= و ارسال None به عنوان پارامتر موقعیتی
+            result = ez.run_sequences_full(None, return_flow=True)
         except Exception as e:
             raise RuntimeError(f"اجرای Ezsynth با خطا مواجه شد: {e}")
         elapsed_style = time.time() - start_style
