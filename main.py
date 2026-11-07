@@ -4,16 +4,17 @@ import time
 import threading
 import subprocess
 import tempfile
+import traceback
 
-# --- پیدا کردن مسیر پایه ---
+# ---------- مسیر پایه ----------
 if getattr(sys, 'frozen', False):
     BASE_DIR = sys._MEIPASS
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 FFMPEG_EXE = os.path.join(BASE_DIR, 'ffmpeg', 'ffmpeg.exe')
-if not os.path.exists(FFMPEG_EXE):
-    FFMPEG_EXE = 'ffmpeg'
+if not os.path.isfile(FFMPEG_EXE):
+    FFMPEG_EXE = 'ffmpeg'  # fallback به PATH سیستم
 
 EZSYNTH_PATH = os.path.join(BASE_DIR, 'ezsynth_lib')
 if os.path.exists(EZSYNTH_PATH) and EZSYNTH_PATH not in sys.path:
@@ -22,27 +23,123 @@ if os.path.exists(EZSYNTH_PATH) and EZSYNTH_PATH not in sys.path:
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from ezsynth.main_ez import Ezsynth
-from ezsynth.aux_classes import RunConfig
-from ezsynth.aux_utils import save_seq
+# ---------- تلاش برای import Ezsynth با پیام خطای واضح ----------
+try:
+    from ezsynth.main_ez import Ezsynth
+    from ezsynth.aux_classes import RunConfig
+    from ezsynth.aux_utils import save_seq
+    from ezsynth.sequences import EasySequence
+except Exception as e:
+    messagebox.showerror(
+        "خطای حیاتی",
+        f"کتابخانه Ezsynth بارگذاری نشد:\n{e}\n\n"
+        "مطمئن شوید پوشه ezsynth_lib در کنار برنامه وجود دارد."
+    )
+    sys.exit(1)
 
 
-# ------------------ توابع پردازش ------------------
+# ==================== توابع پردازش ====================
+
+def _check_ffmpeg():
+    """بررسی وجود ffmpeg و بازگرداندن مسیر آن؛ در صورت نبود، خطای واضح می‌دهد."""
+    global FFMPEG_EXE
+    if os.path.isfile(FFMPEG_EXE):
+        return FFMPEG_EXE
+    # اگر در PATH بود
+    import shutil
+    found = shutil.which('ffmpeg')
+    if found:
+        FFMPEG_EXE = found
+        return found
+    raise FileNotFoundError(
+        "ffmpeg پیدا نشد. لطفاً ffmpeg را در PATH سیستم قرار دهید "
+        "یا فایل ffmpeg.exe را در پوشه ffmpeg کنار برنامه بگذارید."
+    )
+
 
 def extract_frames(video_path, output_dir):
+    """استخراج فریم‌ها با ffmpeg. در صورت خطا، پیام واضح می‌دهد."""
+    ffmpeg = _check_ffmpeg()
     os.makedirs(output_dir, exist_ok=True)
-    cmd = [FFMPEG_EXE, '-i', video_path, os.path.join(output_dir, 'frame_%06d.png')]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    cmd = [ffmpeg, '-i', video_path, os.path.join(output_dir, 'frame_%06d.png')]
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        raise RuntimeError(
+            "استخراج فریم‌ها با ffmpeg شکست خورد. "
+            "آیا فایل ویدیو سالم است؟ فرمت آن پشتیبانی می‌شود؟"
+        )
 
 
 def frames_to_video(frames_dir, output_video, fps=30):
-    cmd = [FFMPEG_EXE, '-y', '-framerate', str(fps),
-           '-i', os.path.join(frames_dir, '%06d.png'),
-           '-c:v', 'libx264', '-pix_fmt', 'yuv420p', output_video]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ffmpeg = _check_ffmpeg()
+    cmd = [
+        ffmpeg, '-y',
+        '-framerate', str(fps),
+        '-i', os.path.join(frames_dir, '%06d.png'),
+        '-c:v', 'libx264',
+        '-pix_fmt', 'yuv420p',
+        output_video
+    ]
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        raise RuntimeError(
+            "ساخت ویدیوی خروجی شکست خورد. "
+            "احتمالاً فریم‌های ذخیره‌شده ناقص هستند."
+        )
+
+
+def _safe_unpack_ezsynth_result(result):
+    """
+    خروجی run_sequences_full ممکن است:
+      - تاپل ۳ عضوی (stylized, err, flow)
+      - تاپل ۲ عضوی (stylized, err)
+      - مستقیماً لیست فریم‌ها
+    این تابع در همه حالت‌ها لیست فریم‌های استایل‌شده را برمی‌گرداند.
+    """
+    if result is None:
+        raise RuntimeError(
+            "Ezsynth مقدار None برگرداند. "
+            "احتمالاً مدل‌های EF_RAFT در پوشه ezsynth_lib وجود ندارند "
+            "یا فایل‌های DLL به درستی بارگذاری نشده‌اند."
+        )
+    if isinstance(result, tuple):
+        if len(result) == 0:
+            raise RuntimeError("Ezsynth تاپل خالی برگرداند.")
+        stylized = result[0]
+    else:
+        stylized = result
+
+    if stylized is None:
+        raise RuntimeError("لیست فریم‌های استایل‌شده None است. مدل‌ها یا حافظه را بررسی کنید.")
+    if not hasattr(stylized, '__len__') or len(stylized) == 0:
+        raise RuntimeError("Ezsynth هیچ فریمی تولید نکرد.")
+    return stylized
+
+
+def _fallback_save_frames(frames, out_dir):
+    """ذخیره دستی فریم‌ها با PIL در صورت شکست save_seq."""
+    import numpy as np
+    from PIL import Image
+    os.makedirs(out_dir, exist_ok=True)
+    for i, frame in enumerate(frames):
+        if frame is None:
+            continue
+        if isinstance(frame, np.ndarray):
+            # اطمینان از نوع uint8
+            if frame.dtype != np.uint8:
+                frame = frame.astype('uint8')
+            img = Image.fromarray(frame)
+        else:
+            img = frame
+        img.save(os.path.join(out_dir, f'{i:06d}.png'))
 
 
 def run_conversion(input_video, output_video, style_image=None, log_cb=None):
+    """
+    فرایند کامل تبدیل. هر خطا با پیام فارسی و قابل‌فهم بازگردانده می‌شود.
+    """
     t_start = time.time()
 
     def _log(msg):
@@ -55,44 +152,66 @@ def run_conversion(input_video, output_video, style_image=None, log_cb=None):
         extract_frames(input_video, frames_dir)
         frame_files = sorted([f for f in os.listdir(frames_dir) if f.endswith('.png')])
         if not frame_files:
-            raise RuntimeError("هیچ فریمی استخراج نشد. ffmpeg در دسترس است؟")
-
+            raise RuntimeError("هیچ فریمی استخراج نشد. ویدیو ممکن است خالی باشد.")
         total = len(frame_files)
         _log(f"مجموع فریم‌ها: {total}")
 
         if style_image is None:
             style_image = os.path.join(frames_dir, frame_files[0])
 
+        # --- ساخت Ezsynth با تنظیمات سبک ---
         cfg = RunConfig(pre_mask=False, feather=5)
-        ez = Ezsynth(
-            style_paths=[style_image],
-            image_folder=frames_dir,
-            cfg=cfg,
-            edge_method="PAGE",
-            raft_flow_model_name="25000_ours-sintel",
-            do_mask=False,
-            flow_arch="EF_RAFT",
-        )
+        try:
+            ez = Ezsynth(
+                style_paths=[style_image],
+                image_folder=frames_dir,
+                cfg=cfg,
+                edge_method="PAGE",
+                raft_flow_model_name="25000_ours-sintel",
+                do_mask=False,
+                flow_arch="EF_RAFT",
+            )
+        except Exception as e:
+            raise RuntimeError(f"راه‌اندازی Ezsynth شکست خورد: {e}")
 
-        _log("در حال استایل‌دهی فریم‌ها...")
+        _log("در حال استایل‌دهی فریم‌ها... (ممکن است چند دقیقه طول بکشد)")
         start_style = time.time()
-        stylized_frames, _, _ = ez.run_sequences_full(only_mode=None, return_flow=True)
+        try:
+            result = ez.run_sequences_full(only_mode=None, return_flow=True)
+        except Exception as e:
+            raise RuntimeError(f"اجرای Ezsynth با خطا مواجه شد: {e}")
         elapsed_style = time.time() - start_style
         _log(f"استایل‌دهی تمام شد ({elapsed_style:.1f} ثانیه)")
+
+        stylized_frames = _safe_unpack_ezsynth_result(result)
+        _log(f"تعداد فریم‌های استایل‌شده: {len(stylized_frames)}")
 
         stylized_dir = os.path.join(tmpdir, 'stylized')
         os.makedirs(stylized_dir, exist_ok=True)
         _log("ذخیره فریم‌های استایل‌شده...")
-        save_seq(stylized_frames, stylized_dir)
+
+        # --- تلاش برای save_seq؛ در صورت شکست، ذخیره دستی ---
+        try:
+            save_seq(stylized_frames, stylized_dir)
+            # بررسی اینکه حداقل یک فریم ذخیره شده باشد
+            if not any(f.endswith('.png') for f in os.listdir(stylized_dir)):
+                raise RuntimeError("save_seq هیچ فایلی ذخیره نکرد.")
+        except Exception as e:
+            _log(f"save_seq شکست خورد ({e})، ذخیره دستی فریم‌ها...")
+            _fallback_save_frames(stylized_frames, stylized_dir)
+
+        # اطمینان نهایی
+        if not any(f.endswith('.png') for f in os.listdir(stylized_dir)):
+            raise RuntimeError("هیچ فریمی ذخیره نشد. پردازش ناقص است.")
 
         _log("ساخت ویدیوی خروجی...")
         frames_to_video(stylized_dir, output_video, fps=30)
 
         total_elapsed = time.time() - t_start
-        _log(f"تمام شد در {total_elapsed:.1f} ثانیه")
+        _log(f"✅ تمام شد در {total_elapsed:.1f} ثانیه")
 
 
-# ------------------ رابط گرافیکی ------------------
+# ==================== رابط گرافیکی ====================
 
 class App:
     def __init__(self, root):
@@ -100,6 +219,7 @@ class App:
         self.root.title("Video to Anime — Ezsynth Offline")
         self.root.geometry("720x520")
         self.root.configure(bg="#1e1e2e")
+        self.root.resizable(True, True)
 
         self.style = ttk.Style()
         try:
@@ -199,10 +319,8 @@ class App:
 
             def _log(msg):
                 self.root.after(0, self.log, msg)
-                # به‌روزرسانی زمان سپری‌شده
                 elapsed = time.time() - t_start
                 self.root.after(0, self.time_var.set, f"زمان سپری‌شده: {self._fmt(elapsed)}")
-                # تلاش برای به‌روزرسانی تعداد فریم از روی پیام
                 if "مجموع فریم‌ها:" in msg:
                     try:
                         n = msg.split(":")[-1].strip()
@@ -219,7 +337,8 @@ class App:
             )
             self.root.after(0, self._done, True, None)
         except Exception as e:
-            self.root.after(0, self._done, False, str(e))
+            tb = traceback.format_exc()
+            self.root.after(0, self._done, False, f"{e}\n\n{tb}")
 
     def _done(self, ok, err):
         self.start_btn.config(state='normal')
